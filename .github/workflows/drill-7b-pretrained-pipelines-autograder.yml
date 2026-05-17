@@ -1,0 +1,44 @@
+name: Drill 7B — Pre-Trained Pipelines Autograder
+on:
+  push:
+    branches: ['*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --index-url https://download.pytorch.org/whl/cpu torch
+          pip install -r requirements.txt
+
+      - name: Cache Hugging Face models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-cache-drill-7b-${{ hashFiles('drill.py', 'tests/test_drill_7b.py') }}
+          restore-keys: |
+            hf-cache-drill-7b-
+
+      - name: Run autograder tests
+        env:
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          # QA can substitute a tiny-random checkpoint (short contexts, ~12 tokens).
+          # Summarization cannot: tiny-random BART checkpoints on the Hub have
+          # max_position_embeddings=100, smaller than the drill test text (~118
+          # tokens) and the integration smoke articles (470-1610 tokens). The
+          # real distilbart-cnn-6-6 (~230 MB) downloads once and is cached.
+          QA_MODEL_FOR_CI: hf-internal-testing/tiny-random-DistilBertForQuestionAnswering
+        run: pytest tests/ -v
